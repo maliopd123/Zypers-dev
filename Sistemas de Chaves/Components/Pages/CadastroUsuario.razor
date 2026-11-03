@@ -1,0 +1,112 @@
+@page "/cadastro-usuario"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+@using System.ComponentModel.DataAnnotations
+@using MySql.Data.MySqlClient
+@inject CategoriasDAO Categorias
+@inject UsuariosDAO Usuarios
+@inject IPasswordHasher<Usuario> PasswordHasher
+@inject NavigationManager Navigation
+
+<PageTitle>Cadastrar usuário | Sistema de Chaves</PageTitle>
+
+<div class="login-screen">
+    <section class="login-brand">
+        <IfroBrand />
+        <div class="hero-brand">
+            <svg class="hero-shield" viewBox="0 0 80 80" aria-hidden="true">
+                <path d="M40 5 68 15v22c0 18-11 30-28 39C23 67 12 55 12 37V15L40 5Z" fill="none" stroke="#8fe57c" stroke-width="3" />
+                <circle cx="43" cy="34" r="11" fill="none" stroke="#a8ef8b" stroke-width="5" />
+                <path d="m35 42-19 20v8h10v-8h9v-8h8l7-8" fill="none" stroke="#a8ef8b" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" />
+            </svg>
+            <div><h2>Projeto<br /><span>Chaves</span></h2></div>
+        </div>
+        <p class="hero-caption">Cadastro de usuário</p>
+    </section>
+    <section class="login-panel">
+        <div class="login-card">
+            <h1 class="login-title">Novo usuário</h1>
+            <p class="login-subtitle">Informe seus dados para solicitar acesso</p>
+            @if (!string.IsNullOrWhiteSpace(_erro))
+            {
+                <p class="login-error" role="alert">@_erro</p>
+            }
+            <EditForm Model="_form" OnValidSubmit="CadastrarAsync">
+                <DataAnnotationsValidator />
+                <div class="login-form">
+                    <label>Nome completo<InputText @bind-Value="_form.Nome" autocomplete="name" required /></label>
+                    <label>Código único<InputText @bind-Value="_form.Codigo" autocomplete="username" required /></label>
+                    <label>E-mail<InputText @bind-Value="_form.Email" type="email" autocomplete="email" required /></label>
+                    <label>Categoria
+                        <InputSelect @bind-Value="_form.CategoriaId" required>
+                            <option value="0">Selecione</option>
+                            @foreach (var categoria in _categorias)
+                            {
+                                <option value="@categoria.Id">@categoria.Nome</option>
+                            }
+                        </InputSelect>
+                    </label>
+                    <label>Senha<InputText @bind-Value="_form.Senha" type="password" minlength="8" autocomplete="new-password" required /></label>
+                    <button class="login-submit" type="submit">Cadastrar</button>
+                    <ValidationSummary />
+                    <div class="login-links"><a href="/login">Já tenho cadastro</a></div>
+                </div>
+            </EditForm>
+        </div>
+    </section>
+</div>
+
+@code {
+    private readonly CadastroForm _form = new();
+    private List<Categoria> _categorias = [];
+    private string _erro = "";
+
+    protected override async Task OnInitializedAsync() =>
+        _categorias = await Categorias.ListarUsuariosAsync();
+
+    private async Task CadastrarAsync()
+    {
+        _erro = "";
+        if (_form.CategoriaId <= 0)
+        {
+            _erro = "Selecione uma categoria.";
+            return;
+        }
+
+        try
+        {
+            var usuario = new Usuario
+            {
+                Codigo = _form.Codigo.Trim(),
+                Nome = _form.Nome.Trim(),
+                Email = _form.Email.Trim(),
+                CategoriaId = _form.CategoriaId,
+                NivelAcesso = "consulta"
+            };
+            usuario.SenhaHash = PasswordHasher.HashPassword(usuario, _form.Senha);
+            await Usuarios.CriarAsync(usuario);
+            Navigation.NavigateTo("/login?cadastro=ok", forceLoad: true);
+        }
+        catch (MySqlException ex) when (ex.Number == 1062)
+        {
+            _erro = "Esse código ou e-mail já está cadastrado.";
+        }
+        catch (Exception)
+        {
+            _erro = "Não foi possível concluir o cadastro. Confira os dados e tente novamente.";
+        }
+    }
+
+    private sealed class CadastroForm
+    {
+        [Required(ErrorMessage = "Informe o nome.")]
+        public string Nome { get; set; } = "";
+        [Required(ErrorMessage = "Informe o código único.")]
+        public string Codigo { get; set; } = "";
+        [Required, EmailAddress(ErrorMessage = "Informe um e-mail válido.")]
+        public string Email { get; set; } = "";
+        [Required, MinLength(8, ErrorMessage = "A senha precisa ter pelo menos 8 caracteres.")]
+        public string Senha { get; set; } = "";
+        public int CategoriaId { get; set; }
+    }
+}

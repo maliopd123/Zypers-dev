@@ -1,0 +1,39 @@
+@page "/recuperar-senha"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+
+<PageTitle>Recuperar senha | Sistema de Chaves</PageTitle>
+
+<div class="login-screen">
+    <section class="login-brand">
+        <IfroBrand />
+        <div class="hero-brand">
+            <svg class="hero-shield" viewBox="0 0 80 80" aria-hidden="true">
+                <path d="M40 5 68 15v22c0 18-11 30-28 39C23 67 12 55 12 37V15L40 5Z" fill="none" stroke="#8fe57c" stroke-width="3" />
+                <circle cx="43" cy="34" r="11" fill="none" stroke="#a8ef8b" stroke-width="5" />
+                <path d="m35 42-19 20v8h10v-8h9v-8h8l7-8" fill="none" stroke="#a8ef8b" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" />
+            </svg>
+            <div><h2>Projeto<br /><span>Chaves</span></h2></div>
+        </div>
+        <p class="hero-caption">Acesso seguro ao sistema</p>
+    </section>
+    <section class="login-panel">
+        <div class="login-card">
+            <h1 class="login-title">Recuperar senha</h1>
+            <p class="login-subtitle">Confirme seus dados para cadastrar uma nova senha</p>
+            @if (Navigation.Uri.Contains("erro=1", StringComparison.OrdinalIgnoreCase))
+            {
+                <p class="login-error" role="alert">Não foi possível confirmar os dados. Verifique código, e-mail e senha.</p>
+            }
+            <form class="login-form" method="post" action="/auth/recuperar">
+                <label>Código único<input name="codigo" autocomplete="username" required /></label>
+                <label>E-mail cadastrado<input name="email" type="email" autocomplete="email" required /></label>
+                <label>Nova senha<input name="senha" type="password" minlength="8" autocomplete="new-password" required /></label>
+                <label>Confirmar senha<input name="confirmacao" type="password" minlength="8" autocomplete="new-password" required /></label>
+                <button class="login-submit" type="submit">Salvar nova senha</button>
+                <div class="login-links"><a href="/login">Voltar ao login</a></div>
+            </form>
+        </div>
+    </section>
+</div>

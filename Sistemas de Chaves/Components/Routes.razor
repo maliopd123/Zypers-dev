@@ -1,0 +1,16 @@
+﻿<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                <LayoutView Layout="typeof(LoginLayout)">
+                    <section class="access-message">
+                        <h1>Acesso ao sistema</h1>
+                        <p>Entre com seu código único para continuar.</p>
+                        <a class="button button-primary" href="/login">Ir para o login</a>
+                    </section>
+                </LayoutView>
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

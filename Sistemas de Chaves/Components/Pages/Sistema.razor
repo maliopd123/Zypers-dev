@@ -1,0 +1,846 @@
+@page "/"
+@page "/sistema/{Tela}"
+@attribute [Authorize]
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@inject AuthenticationStateProvider EstadoAutenticacao
+@inject CategoriasDAO Categorias
+@inject UsuariosDAO Usuarios
+@inject ChavesDAO Chaves
+@inject MovimentacoesDAO Movimentacoes
+@inject PainelDAO Painel
+@inject AlertasDAO Alertas
+@inject ConfiguracoesDAO Configuracoes
+@inject RelatoriosDAO Relatorios
+@inject IPasswordHasher<Usuario> PasswordHasher
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>@Titulo | Sistema de Chaves</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Projeto Chaves</p>
+        <h1>@Titulo</h1>
+        <p>@Descricao</p>
+    </div>
+    @if (Tela == "chaves-disponiveis")
+    {
+        <a class="button button-light" href="/sistema/cadastro-chave">Cadastrar chave</a>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_feedback))
+{
+    <div class="notice @(_feedbackErro ? "notice-error" : "notice-ok")" role="status">@_feedback</div>
+}
+@if (_semAcesso)
+{
+    <section class="surface empty-state">
+        <div><h2>Acesso não autorizado</h2><p>Seu nível de acesso não permite abrir esta tela.</p></div>
+    </section>
+}
+else if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <section class="surface empty-state">
+        <div><h2>Não foi possível abrir esta tela</h2><p>@_erro</p></div>
+    </section>
+}
+else if (Tela is null or "" or "inicio")
+{
+    <section class="stats-grid">
+        <article class="stat-card"><span class="stat-label">Total de chaves</span><strong class="stat-number">@_resumo.TotalChaves</strong><span class="stat-foot">Cadastradas no sistema</span></article>
+        <article class="stat-card"><span class="stat-label">Disponíveis</span><strong class="stat-number">@_resumo.Disponiveis</strong><span class="stat-foot">Prontas para retirada</span></article>
+        <article class="stat-card"><span class="stat-label">Em uso</span><strong class="stat-number">@_resumo.EmUso</strong><span class="stat-foot">Dentro do prazo</span></article>
+        <article class="stat-card"><span class="stat-label">Em atraso</span><strong class="stat-number">@_resumo.EmAtraso</strong><span class="stat-foot">Precisam de devolução</span></article>
+    </section>
+
+    <div class="dashboard-grid">
+        <section class="panel">
+            <div class="panel-heading"><span>Acessos rápidos</span></div>
+            <div class="panel-body">
+                <div class="quick-grid">
+                    <a class="quick-card" href="/sistema/relatorios"><span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20V4h16v16H4Z"/><path d="M8 16v-4m4 4V8m4 8v-6"/></svg></span><span><strong>Tela de Relatórios</strong><small>Movimentações por período</small></span></a>
+                    <a class="quick-card" href="/sistema/alertas"><span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><strong>Alertas de atraso</strong><small>Chaves que passaram do prazo</small></span></a>
+                    <a class="quick-card" href="/sistema/usuarios"><span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3 20v-1a6 6 0 0 1 12 0v1m2-12a3.5 3.5 0 0 1 0 6.8m1 2a5 5 0 0 1 3 4.2"/></svg></span><span><strong>Cadastro de usuários</strong><small>Usuários e níveis de acesso</small></span></a>
+                    <a class="quick-card" href="/sistema/cadastro-chave"><span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="8" r="4"/><path d="m11 11 9 9m-3-3 2-2m-5-1 2-2"/></svg></span><span><strong>Cadastrar chave</strong><small>Adicionar ao inventário</small></span></a>
+                    <a class="quick-card" href="/sistema/chaves-disponiveis"><span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8m-8 4h8m-8 4h5"/></svg></span><span><strong>Consultar chaves</strong><small>Ver chaves disponíveis</small></span></a>
+                    <a class="quick-card" href="/sistema/retirada"><span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></span><span><strong>Registrar retirada</strong><small>Informar usuário e prazo</small></span></a>
+                </div>
+                <div class="panel-heading">Últimas movimentações</div>
+                @if (_recentes.Count == 0)
+                {
+                    <div class="empty-state"><div><h2>Nenhuma movimentação</h2><p>As retiradas e devoluções aparecerão aqui.</p></div></div>
+                }
+                else
+                {
+                    <div class="table-scroll">
+                        <table>
+                            <thead><tr><th>Chave</th><th>Usuário</th><th>Retirada</th><th>Situação</th></tr></thead>
+                            <tbody>
+                                @foreach (var item in _recentes)
+                                {
+                                    <tr><td>@item.CodigoChave · @item.DescricaoChave</td><td>@item.NomeUsuario</td><td>@item.RetiradaEm.ToString("dd/MM/yyyy HH:mm")</td><td><span class="status @ClasseSituacao(item.Situacao)">@NomeSituacao(item.Situacao)</span></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </section>
+        <section class="panel">
+            <div class="panel-heading"><span>Alertas de atraso</span><a href="/sistema/alertas">Ver todos</a></div>
+            <div class="panel-body">
+                @if (_alertas.Count == 0)
+                {
+                    <div class="empty-state"><div><h2>Sem alertas</h2><p>As chaves em atraso serão mostradas aqui.</p></div></div>
+                }
+                else
+                {
+                    <div class="alert-stack">
+                        @foreach (var alerta in _alertas.Take(5))
+                        {
+                            <a class="alert-card" href="/sistema/alertas">
+                                <span class="alert-dot"></span>
+                                <span><strong>Chave @alerta.CodigoChave em atraso</strong><small>@alerta.NomeUsuario · @alerta.MinutosAtraso min após o prazo</small></span>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    </div>
+}
+else if (Tela == "cadastro-chave")
+{
+    <EditForm Model="_novaChave" OnValidSubmit="SalvarChaveAsync" class="form-card">
+        <DataAnnotationsValidator />
+        <h2>Dados da chave</h2>
+        <div class="form-grid">
+            <div class="form-field"><label>Código da chave</label><InputText @bind-Value="_novaChave.Codigo" required /></div>
+            <div class="form-field"><label>Descrição</label><InputText @bind-Value="_novaChave.Descricao" required placeholder="Informe uma descrição" /></div>
+            <div class="form-field"><label>Local</label><InputText @bind-Value="_novaChave.Local" required placeholder="Informe o local" /></div>
+            <div class="form-field"><label>Categoria</label>
+                <InputSelect @bind-Value="_novaChave.CategoriaId" required>
+                    <option value="0">Selecione uma categoria</option>
+                    @foreach (var categoria in _categoriasChave)
+                    {
+                        <option value="@categoria.Id">@categoria.Nome</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="@(() => _novaChave.CategoriaId)" />
+            </div>
+            <div class="form-field"><label>Data de cadastro</label><input type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" disabled /></div>
+            <div class="form-field full"><label>Observações <small>(opcional)</small></label><InputTextArea @bind-Value="_novaChave.Observacoes" placeholder="Informações adicionais" /></div>
+        </div>
+        <div class="form-footer"><a class="button button-light" href="/">Cancelar</a><button class="button button-primary" type="submit">Salvar chave</button></div>
+    </EditForm>
+}
+else if (Tela == "chaves-disponiveis")
+{
+    <form class="filter-bar" @onsubmit="FiltrarChavesAsync" @onsubmit:preventDefault>
+        <input @bind="_buscaChave" placeholder="Buscar por código ou descrição" aria-label="Buscar chaves" />
+        <select @bind="_categoriaFiltro" aria-label="Filtrar por categoria">
+            <option value="0">Todas as categorias</option>
+            @foreach (var categoria in _categoriasChave)
+            {
+                <option value="@categoria.Id">@categoria.Nome</option>
+            }
+        </select>
+        <button class="button button-light" type="submit">Buscar</button>
+    </form>
+    @if (_chaves.Count == 0)
+    {
+        <section class="surface empty-state"><div><h2>Nenhuma chave disponível</h2><p>Cadastre uma chave ou altere os filtros.</p></div></section>
+    }
+    else
+    {
+        <div class="key-grid">
+            @foreach (var chave in _chaves)
+            {
+                <button class="key-tile" type="button" @onclick="() => AbrirRetirada(chave)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="8" r="4"></circle><path d="m11 11 9 9m-3-3 2-2m-5-1 2-2"></path></svg>
+                    <strong>@chave.Codigo</strong>
+                    <small>@chave.Descricao</small>
+                </button>
+            }
+        </div>
+    }
+}
+else if (Tela == "retirada")
+{
+    <EditForm Model="_uso" OnValidSubmit="RegistrarUsoAsync" class="form-card">
+        <DataAnnotationsValidator />
+        <h2>Dados da retirada</h2>
+        <div class="form-grid">
+            <div class="form-field"><label>Código da chave</label><InputText @bind-Value="_uso.CodigoChave" required /></div>
+            <div class="form-field"><label>Código do usuário</label><InputText @bind-Value="_uso.CodigoUsuario" required /></div>
+            <div class="form-field"><label>Data e hora da retirada</label><input type="datetime-local" @bind="_uso.RetiradaEm" required /></div>
+            <div class="form-field"><label>Previsão de devolução</label><input type="datetime-local" @bind="_uso.PrevistaDevolucao" required /></div>
+            <div class="form-field full"><label>Observações <small>(opcional)</small></label><InputTextArea @bind-Value="_uso.Observacoes" /></div>
+        </div>
+        <div class="form-footer"><button class="button button-primary" type="submit">Registrar retirada</button></div>
+    </EditForm>
+    <p class="footer-note">A chave só fica disponível para outra retirada depois que a devolução for registrada.</p>
+}
+else if (Tela == "devolucao")
+{
+    <div class="dashboard-grid">
+        <EditForm Model="_devolucao" OnValidSubmit="RegistrarDevolucaoAsync" class="form-card">
+            <DataAnnotationsValidator />
+            <h2>Registrar devolução</h2>
+            <div class="form-grid">
+                <div class="form-field"><label>Código da chave</label><InputText @bind-Value="_devolucao.CodigoChave" required /></div>
+                <div class="form-field"><label>Código do usuário</label><InputText @bind-Value="_devolucao.CodigoUsuario" required /></div>
+                <div class="form-field full"><label>Data e hora da devolução</label><input type="datetime-local" @bind="_devolucao.DevolvidaEm" required /></div>
+                <div class="form-field full"><label>Observações <small>(opcional)</small></label><InputTextArea @bind-Value="_devolucao.Observacoes" /></div>
+            </div>
+            <div class="form-footer"><button class="button button-primary" type="submit">Confirmar devolução</button></div>
+        </EditForm>
+        <section class="panel">
+            <div class="panel-heading">Chaves pendentes</div>
+            <div class="table-scroll"><table>
+                <thead><tr><th>Chave</th><th>Usuário</th><th>Previsão</th></tr></thead>
+                <tbody>
+                    @foreach (var item in _pendentes)
+                    {
+                        <tr><td>@item.CodigoChave</td><td>@item.NomeUsuario</td><td>@item.PrevistaDevolucao.ToString("dd/MM HH:mm")</td></tr>
+                    }
+                </tbody>
+            </table></div>
+        </section>
+    </div>
+}
+else if (Tela is "em-uso" or "atraso" or "historico")
+{
+    <form class="filter-bar" @onsubmit="FiltrarMovimentacoesAsync" @onsubmit:preventDefault>
+        <input @bind="_buscaMovimentacao" placeholder="Buscar por chave ou usuário" aria-label="Buscar movimentações" />
+        <input type="date" @bind="_inicio" aria-label="Data inicial" />
+        <input type="date" @bind="_fim" aria-label="Data final" />
+        <button class="button button-light" type="submit">Filtrar</button>
+    </form>
+    <section class="data-card table-scroll">
+        <table>
+            <thead><tr><th>Chave</th><th>Local</th><th>Usuário</th><th>Retirada</th><th>Previsão</th><th>Devolução</th><th>Situação</th>@if (Tela != "historico"){<th>Ação</th>}</tr></thead>
+            <tbody>
+                @foreach (var item in _movimentacoes)
+                {
+                    <tr>
+                        <td>@item.CodigoChave · @item.DescricaoChave</td><td>@item.LocalChave</td><td>@item.NomeUsuario · @item.CodigoUsuario</td>
+                        <td>@item.RetiradaEm.ToString("dd/MM/yyyy HH:mm")</td><td>@item.PrevistaDevolucao.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@(item.DevolvidaEm?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                        <td><span class="status @ClasseSituacao(item.Situacao)">@NomeSituacao(item.Situacao)</span></td>
+                        @if (Tela != "historico")
+                        {
+                            <td><button class="button button-light button-small" type="button" @onclick="() => AbrirDevolucao(item)">Devolver</button></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_movimentacoes.Count == 0)
+        {
+            <div class="empty-state"><div><h2>Nenhum registro</h2><p>Não há movimentações para os filtros selecionados.</p></div></div>
+        }
+    </section>
+}
+else if (Tela == "usuarios")
+{
+    <div class="dashboard-grid">
+        <EditForm Model="_novoUsuario" OnValidSubmit="CadastrarUsuarioAsync" class="form-card">
+            <DataAnnotationsValidator />
+            <h2>Cadastrar usuário</h2>
+            <div class="form-grid">
+                <div class="form-field full"><label>Nome completo</label><InputText @bind-Value="_novoUsuario.Nome" required /></div>
+                <div class="form-field"><label>Código único</label><InputText @bind-Value="_novoUsuario.Codigo" required /></div>
+                <div class="form-field"><label>E-mail</label><InputText @bind-Value="_novoUsuario.Email" type="email" required /></div>
+                <div class="form-field"><label>Categoria</label><InputSelect @bind-Value="_novoUsuario.CategoriaId"><option value="0">Selecione</option>@foreach (var c in _categoriasUsuario){<option value="@c.Id">@c.Nome</option>}</InputSelect></div>
+                <div class="form-field"><label>Nível de acesso</label><InputSelect @bind-Value="_novoUsuario.NivelAcesso"><option value="consulta">Consulta</option><option value="operador">Operador</option><option value="administrador">Administrador</option></InputSelect></div>
+                <div class="form-field full"><label>Senha inicial</label><InputText @bind-Value="_novoUsuario.Senha" type="password" minlength="8" required /></div>
+            </div>
+            <div class="form-footer"><button class="button button-primary" type="submit">Salvar usuário</button></div>
+        </EditForm>
+        <section class="data-card table-scroll">
+            <table><thead><tr><th>Nome</th><th>Código</th><th>Categoria</th><th>Acesso</th><th>Status</th></tr></thead>
+                <tbody>@foreach (var usuario in _usuarios){<tr><td>@usuario.Nome</td><td>@usuario.Codigo</td><td>@usuario.Categoria</td><td>@NomeNivel(usuario.NivelAcesso)</td><td>@(usuario.Ativo ? "Ativo" : "Inativo")</td></tr>}</tbody>
+            </table>
+        </section>
+    </div>
+}
+else if (Tela == "categorias")
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <span>Categorias</span>
+            <select @bind="_tipoCategoria" aria-label="Tipo de categoria">
+                <option value="usuarios">Categorias de usuários</option>
+                <option value="chaves">Categorias de chaves</option>
+            </select>
+        </div>
+        <div class="panel-body">
+            <form class="filter-bar" @onsubmit="SalvarCategoriaAsync" @onsubmit:preventDefault>
+                <input @bind="_nomeCategoria" placeholder="Nome da categoria" required />
+                <button class="button button-primary" type="submit">Adicionar categoria</button>
+            </form>
+            <div class="table-scroll"><table><thead><tr><th>Nome</th><th>Ação</th></tr></thead>
+                <tbody>@foreach (var categoria in _categorias){<tr><td>@categoria.Nome</td><td><button class="button button-light button-small" type="button" @onclick="() => InativarCategoriaAsync(categoria.Id)">Desativar</button></td></tr>}</tbody>
+            </table></div>
+        </div>
+    </section>
+}
+else if (Tela == "permissoes")
+{
+    <section class="data-card table-scroll">
+        <table><thead><tr><th>Usuário</th><th>Código</th><th>Categoria</th><th>Nível de acesso</th><th>Conta ativa</th><th>Ação</th></tr></thead>
+            <tbody>
+                @foreach (var usuario in _usuarios)
+                {
+                    <tr>
+                        <td>@usuario.Nome</td><td>@usuario.Codigo</td><td>@usuario.Categoria</td>
+                        <td><select @bind="usuario.NivelAcesso"><option value="consulta">Consulta</option><option value="operador">Operador</option><option value="administrador">Administrador</option></select></td>
+                        <td><input type="checkbox" @bind="usuario.Ativo" /></td>
+                        <td><button class="button button-primary button-small" type="button" @onclick="() => SalvarPermissaoAsync(usuario)">Salvar</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+else if (Tela == "configuracoes")
+{
+    <EditForm Model="_configuracao" OnValidSubmit="SalvarConfiguracoesAsync" class="form-card">
+        <DataAnnotationsValidator />
+        <h2>Configurações do sistema</h2>
+        <div class="form-grid">
+            <div class="form-field full"><label>Nome do sistema</label><InputText @bind-Value="_configuracao.NomeSistema" required /></div>
+            <div class="form-field"><label>Minutos após o prazo para gerar alerta</label><InputNumber @bind-Value="_configuracao.MinutosParaAlerta" min="0" max="10080" /></div>
+        </div>
+        <p class="footer-note">O alerta aparece no painel e na lista de atrasos depois do tempo configurado.</p>
+        <div class="form-footer"><button class="button button-primary" type="submit">Salvar alterações</button></div>
+    </EditForm>
+}
+else if (Tela == "relatorios")
+{
+    <form class="filter-bar" @onsubmit="GerarRelatorioAsync" @onsubmit:preventDefault>
+        <label class="form-field">De<input type="date" @bind="_inicioRelatorio" /></label>
+        <label class="form-field">Até<input type="date" @bind="_fimRelatorio" /></label>
+        <button class="button button-primary" type="submit">Gerar relatório</button>
+        <button class="button button-light" type="button" @onclick="ImprimirAsync">Exportar em PDF</button>
+    </form>
+    <section class="data-card table-scroll">
+        <table><thead><tr><th>Chave</th><th>Usuário</th><th>Retirada</th><th>Previsão</th><th>Devolução</th><th>Situação</th></tr></thead>
+            <tbody>@foreach (var item in _relatorio){<tr><td>@item.CodigoChave · @item.DescricaoChave</td><td>@item.NomeUsuario</td><td>@item.RetiradaEm.ToString("dd/MM/yyyy HH:mm")</td><td>@item.PrevistaDevolucao.ToString("dd/MM/yyyy HH:mm")</td><td>@(item.DevolvidaEm?.ToString("dd/MM/yyyy HH:mm") ?? "—")</td><td>@NomeSituacao(item.Situacao)</td></tr>}</tbody>
+        </table>
+    </section>
+}
+else if (Tela == "perfil")
+{
+    @if (_perfil is not null)
+    {
+        <EditForm Model="_perfil" OnValidSubmit="SalvarPerfilAsync" class="form-card">
+            <DataAnnotationsValidator />
+            <h2>Meu perfil</h2>
+            <div class="form-grid">
+                <div class="form-field"><label>Nome</label><InputText @bind-Value="_perfil.Nome" required /></div>
+                <div class="form-field"><label>Código único</label><input value="@_perfil.Codigo" readonly /></div>
+                <div class="form-field full"><label>E-mail</label><InputText @bind-Value="_perfil.Email" type="email" required /></div>
+                <div class="form-field"><label>Nova senha <small>(opcional)</small></label><InputText @bind-Value="_senhaPerfil" type="password" minlength="8" /></div>
+                <div class="form-field"><label>Confirmar nova senha</label><InputText @bind-Value="_confirmacaoSenhaPerfil" type="password" /></div>
+            </div>
+            <div class="form-footer"><button class="button button-primary" type="submit">Salvar dados</button></div>
+        </EditForm>
+    }
+}
+else if (Tela == "termo")
+{
+    <section class="form-card">
+        <h2>Termo de responsabilidade</h2>
+        <div class="form-grid">
+            <div class="form-field"><label>Código da chave</label><InputText @bind-Value="_codigoTermoChave" /></div>
+            <div class="form-field"><label>Código do usuário</label><InputText @bind-Value="_codigoTermoUsuario" /></div>
+        </div>
+        <div class="form-footer"><button class="button button-primary" type="button" @onclick="CarregarTermoAsync">Gerar termo</button></div>
+    </section>
+    @if (_chaveTermo is not null && _usuarioTermo is not null)
+    {
+        <article class="term-paper">
+            <h2>Termo de responsabilidade</h2>
+            <p>Eu, <strong>@_usuarioTermo.Nome</strong>, código <strong>@_usuarioTermo.Codigo</strong>, declaro que recebi a chave <strong>@_chaveTermo.Codigo</strong>, identificada como <strong>@_chaveTermo.Descricao</strong>, do local <strong>@_chaveTermo.Local</strong>.</p>
+            <p>Comprometo-me a manter a chave sob minha responsabilidade e devolvê-la conforme o prazo registrado no sistema.</p>
+            <p>Data: @DateTime.Now.ToString("dd/MM/yyyy")</p>
+            <div class="term-signatures"><span>@_usuarioTermo.Nome<br />Responsável</span><span>Responsável pelo setor</span></div>
+            <div class="form-footer"><button class="button button-primary" type="button" @onclick="ImprimirAsync">Baixar / imprimir PDF</button></div>
+        </article>
+    }
+}
+else if (Tela == "alertas")
+{
+    <section class="data-card table-scroll">
+        <table><thead><tr><th>Chave</th><th>Usuário</th><th>Prazo</th><th>Atraso</th><th>Alerta</th><th>Ação</th></tr></thead>
+            <tbody>@foreach (var alerta in _alertas){<tr><td>@alerta.CodigoChave</td><td>@alerta.NomeUsuario · @alerta.CodigoUsuario</td><td>@alerta.PrevistaDevolucao.ToString("dd/MM/yyyy HH:mm")</td><td>@alerta.MinutosAtraso min</td><td>@(alerta.LidoEm is null ? "Novo" : "Visualizado")</td><td><button class="button button-light button-small" type="button" @onclick="() => MarcarAlertaLidoAsync(alerta.Id)">Marcar visto</button></td></tr>}</tbody>
+        </table>
+        @if (_alertas.Count == 0){<div class="empty-state"><div><h2>Sem alertas</h2><p>Nenhuma chave passou do prazo configurado.</p></div></div>}
+    </section>
+}
+else
+{
+    <section class="surface empty-state"><div><h2>Página não encontrada</h2><a href="/">Voltar ao painel</a></div></section>
+}
+
+@code {
+    [Parameter] public string? Tela { get; set; }
+
+    private ClaimsPrincipal _usuarioLogado = new(new ClaimsIdentity());
+    private int _usuarioId;
+    private bool _administrador;
+    private bool _operador;
+    private bool _semAcesso;
+    private bool _feedbackErro;
+    private string _feedback = "";
+    private string _erro = "";
+    private string _buscaChave = "";
+    private string _buscaMovimentacao = "";
+    private int _categoriaFiltro;
+    private string _tipoCategoria = "usuarios";
+    private string _nomeCategoria = "";
+    private string _senhaPerfil = "";
+    private string _confirmacaoSenhaPerfil = "";
+    private string _codigoTermoChave = "";
+    private string _codigoTermoUsuario = "";
+    private DateTime _inicio = DateTime.Today.AddDays(-30);
+    private DateTime _fim = DateTime.Today;
+    private DateTime _inicioRelatorio = DateTime.Today.AddDays(-30);
+    private DateTime _fimRelatorio = DateTime.Today;
+    private Chave _novaChave = new() { DataCadastro = DateTime.Today };
+    private UsoForm _uso = new();
+    private DevolucaoForm _devolucao = new();
+    private UsuarioNovoForm _novoUsuario = new();
+    private ConfiguracaoSistema _configuracao = new();
+    private ResumoPainel _resumo = new();
+    private List<Categoria> _categorias = [];
+    private List<Categoria> _categoriasChave = [];
+    private List<Categoria> _categoriasUsuario = [];
+    private List<Chave> _chaves = [];
+    private List<Usuario> _usuarios = [];
+    private List<Movimentacao> _movimentacoes = [];
+    private List<Movimentacao> _recentes = [];
+    private List<Movimentacao> _pendentes = [];
+    private List<Movimentacao> _relatorio = [];
+    private List<AlertaAtraso> _alertas = [];
+    private Usuario? _perfil;
+    private Chave? _chaveTermo;
+    private Usuario? _usuarioTermo;
+
+    private string Titulo => (Tela ?? "inicio") switch
+    {
+        "inicio" => "Painel de Controle",
+        "cadastro-chave" => "Cadastrar Nova Chave",
+        "chaves-disponiveis" => "Chaves Disponíveis",
+        "retirada" => "Registro de Uso",
+        "devolucao" => "Devolução de Chave",
+        "em-uso" => "Chaves em Uso",
+        "atraso" => "Chaves em Atraso",
+        "historico" => "Histórico de Movimentações",
+        "usuarios" => "Cadastro de Usuários",
+        "categorias" => "Categorias de Usuários",
+        "permissoes" => "Controle de Permissões",
+        "configuracoes" => "Configurações do Sistema",
+        "relatorios" => "Relatórios",
+        "perfil" => "Perfil do Usuário",
+        "termo" => "Termo de Responsabilidade",
+        "alertas" => "Alertas de Atraso",
+        _ => "Sistema de Chaves"
+    };
+
+    private string Descricao => (Tela ?? "inicio") switch
+    {
+        "inicio" => "Acompanhe a situação das chaves e as movimentações recentes.",
+        "cadastro-chave" => "Registre uma chave e informe onde ela fica guardada.",
+        "chaves-disponiveis" => "Consulte as chaves que podem ser retiradas.",
+        "retirada" => "Registre quem retirou a chave e quando ela deve ser devolvida.",
+        "devolucao" => "Finalize uma movimentação e libere a chave.",
+        "em-uso" => "Acompanhe as chaves que ainda estão dentro do prazo.",
+        "atraso" => "Consulte as chaves que passaram do prazo de devolução.",
+        "historico" => "Pesquise retiradas e devoluções por chave, usuário e período.",
+        _ => "Gerencie o sistema de chaves do setor."
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await EstadoAutenticacao.GetAuthenticationStateAsync();
+        _usuarioLogado = state.User;
+        int.TryParse(_usuarioLogado.FindFirstValue(ClaimTypes.NameIdentifier), out _usuarioId);
+        _administrador = _usuarioLogado.IsInRole("administrador");
+        _operador = _usuarioLogado.IsInRole("operador");
+        _semAcesso = Tela is "usuarios" or "categorias" or "permissoes" or "configuracoes"
+            ? !_administrador
+            : Tela is "cadastro-chave" or "retirada" or "devolucao" or "relatorios" or "termo"
+                ? !_administrador && !_operador
+                : false;
+        _erro = "";
+        _feedback = "";
+        if (!_semAcesso)
+            await CarregarTelaAsync();
+    }
+
+    private async Task CarregarTelaAsync()
+    {
+        try
+        {
+            switch (Tela ?? "inicio")
+            {
+                case "inicio":
+                    _resumo = await Painel.ObterResumoAsync();
+                    _recentes = (await Movimentacoes.ListarAsync("historico")).Take(6).ToList();
+                    _alertas = await Alertas.ListarAsync();
+                    break;
+                case "cadastro-chave":
+                    _categoriasChave = await Categorias.ListarChavesAsync();
+                    break;
+                case "chaves-disponiveis":
+                    _categoriasChave = await Categorias.ListarChavesAsync();
+                    await FiltrarChavesAsync();
+                    break;
+                case "retirada":
+                    _uso.RetiradaEm = DateTime.Now;
+                    _uso.PrevistaDevolucao = DateTime.Now.AddHours(2);
+                    break;
+                case "devolucao":
+                    _pendentes = (await Movimentacoes.ListarAsync("historico"))
+                        .Where(m => m.DevolvidaEm is null)
+                        .ToList();
+                    break;
+                case "em-uso":
+                    _movimentacoes = await Movimentacoes.ListarAsync("em_uso");
+                    break;
+                case "atraso":
+                    _movimentacoes = await Movimentacoes.ListarAsync("atrasada");
+                    break;
+                case "historico":
+                    _movimentacoes = await Movimentacoes.ListarAsync("historico");
+                    break;
+                case "usuarios":
+                    _categoriasUsuario = await Categorias.ListarUsuariosAsync();
+                    _usuarios = await Usuarios.ListarAsync();
+                    break;
+                case "categorias":
+                    await CarregarCategoriasAsync();
+                    break;
+                case "permissoes":
+                    _usuarios = await Usuarios.ListarAsync();
+                    break;
+                case "configuracoes":
+                    _configuracao = await Configuracoes.ObterAsync();
+                    break;
+                case "perfil":
+                    _perfil = await Usuarios.ObterPorIdAsync(_usuarioId);
+                    break;
+                case "relatorios":
+                    _relatorio = await Relatorios.GerarMovimentacoesAsync(_inicioRelatorio, _fimRelatorio);
+                    break;
+                case "alertas":
+                    _alertas = await Alertas.ListarAsync();
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            _erro = "Verifique a conexão com o banco de dados e tente novamente.";
+        }
+    }
+
+    private async Task FiltrarChavesAsync()
+    {
+        _chaves = await Chaves.ListarAsync("disponivel", _buscaChave, _categoriaFiltro == 0 ? null : _categoriaFiltro);
+    }
+
+    private async Task FiltrarMovimentacoesAsync()
+    {
+        var tipo = Tela == "atraso" ? "atrasada" : Tela == "em-uso" ? "em_uso" : "historico";
+        _movimentacoes = await Movimentacoes.ListarAsync(tipo, _buscaMovimentacao, _inicio, _fim);
+    }
+
+    private async Task SalvarChaveAsync()
+    {
+        try
+        {
+            _novaChave.DataCadastro = DateTime.Now;
+            await Chaves.CriarAsync(_novaChave);
+            MostrarMensagem("Chave cadastrada.", false);
+            _novaChave = new Chave { DataCadastro = DateTime.Today };
+        }
+        catch (Exception ex)
+        {
+            MostrarMensagem(ex is MySql.Data.MySqlClient.MySqlException { Number: 1062 }
+                ? "Esse código de chave já está cadastrado."
+                : "Não foi possível salvar a chave. Confira os dados.", true);
+        }
+    }
+
+    private async Task RegistrarUsoAsync()
+    {
+        try
+        {
+            await Movimentacoes.RegistrarUsoAsync(
+                _uso.CodigoChave, _uso.CodigoUsuario, _usuarioId,
+                _uso.RetiradaEm, _uso.PrevistaDevolucao, _uso.Observacoes);
+            MostrarMensagem("Retirada registrada.", false);
+            _uso = new UsoForm();
+        }
+        catch (InvalidOperationException ex)
+        {
+            MostrarMensagem(ex.Message, true);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível registrar a retirada. Confira os códigos e o prazo.", true);
+        }
+    }
+
+    private async Task RegistrarDevolucaoAsync()
+    {
+        try
+        {
+            await Movimentacoes.RegistrarDevolucaoAsync(
+                _devolucao.CodigoChave, _devolucao.CodigoUsuario,
+                _devolucao.DevolvidaEm, _devolucao.Observacoes);
+            MostrarMensagem("Devolução registrada. A chave está disponível novamente.", false);
+            _devolucao = new DevolucaoForm();
+            _pendentes = (await Movimentacoes.ListarAsync("historico"))
+                .Where(m => m.DevolvidaEm is null)
+                .ToList();
+        }
+        catch (InvalidOperationException ex)
+        {
+            MostrarMensagem(ex.Message, true);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível registrar a devolução. Confira os códigos.", true);
+        }
+    }
+
+    private async Task CadastrarUsuarioAsync()
+    {
+        if (_novoUsuario.CategoriaId <= 0)
+        {
+            MostrarMensagem("Selecione uma categoria para o usuário.", true);
+            return;
+        }
+        try
+        {
+            var usuario = new Usuario
+            {
+                Codigo = _novoUsuario.Codigo.Trim(),
+                Nome = _novoUsuario.Nome.Trim(),
+                Email = _novoUsuario.Email.Trim(),
+                CategoriaId = _novoUsuario.CategoriaId,
+                NivelAcesso = _novoUsuario.NivelAcesso
+            };
+            usuario.SenhaHash = PasswordHasher.HashPassword(usuario, _novoUsuario.Senha);
+            await Usuarios.CriarAsync(usuario);
+            _usuarios = await Usuarios.ListarAsync();
+            _novoUsuario = new UsuarioNovoForm();
+            MostrarMensagem("Usuário cadastrado.", false);
+        }
+        catch (Exception ex)
+        {
+            MostrarMensagem(ex is MySql.Data.MySqlClient.MySqlException { Number: 1062 }
+                ? "Esse código ou e-mail já está cadastrado."
+                : "Não foi possível cadastrar o usuário. Confira os dados.", true);
+        }
+    }
+
+    private async Task SalvarPermissaoAsync(Usuario usuario)
+    {
+        try
+        {
+            await Usuarios.AlterarAcessoAsync(usuario.Id, usuario.NivelAcesso, usuario.Ativo);
+            MostrarMensagem($"Permissão atualizada para {usuario.Nome}.", false);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível atualizar a permissão.", true);
+        }
+    }
+
+    private async Task CarregarCategoriasAsync()
+    {
+        _categorias = _tipoCategoria == "chaves"
+            ? await Categorias.ListarChavesAsync()
+            : await Categorias.ListarUsuariosAsync();
+    }
+
+    private async Task SalvarCategoriaAsync()
+    {
+        try
+        {
+            if (_tipoCategoria == "chaves")
+                await Categorias.SalvarChaveAsync(_nomeCategoria);
+            else
+                await Categorias.SalvarUsuarioAsync(_nomeCategoria);
+            _nomeCategoria = "";
+            await CarregarCategoriasAsync();
+            MostrarMensagem("Categoria cadastrada.", false);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível salvar a categoria. Confira se o nome já existe.", true);
+        }
+    }
+
+    private async Task InativarCategoriaAsync(int id)
+    {
+        try
+        {
+            if (_tipoCategoria == "chaves")
+                await Categorias.InativarChaveAsync(id);
+            else
+                await Categorias.InativarUsuarioAsync(id);
+            await CarregarCategoriasAsync();
+            MostrarMensagem("Categoria desativada.", false);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível desativar a categoria.", true);
+        }
+    }
+
+    private async Task SalvarConfiguracoesAsync()
+    {
+        try
+        {
+            await Configuracoes.SalvarAsync(_configuracao);
+            MostrarMensagem("Configurações salvas.", false);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível salvar as configurações.", true);
+        }
+    }
+
+    private async Task GerarRelatorioAsync()
+    {
+        _relatorio = await Relatorios.GerarMovimentacoesAsync(_inicioRelatorio, _fimRelatorio, _buscaMovimentacao);
+    }
+
+    private async Task SalvarPerfilAsync()
+    {
+        if (_perfil is null)
+            return;
+        try
+        {
+            await Usuarios.AtualizarPerfilAsync(_perfil.Id, _perfil.Nome, _perfil.Email);
+            if (!string.IsNullOrWhiteSpace(_senhaPerfil))
+            {
+                if (_senhaPerfil.Length < 8 || _senhaPerfil != _confirmacaoSenhaPerfil)
+                {
+                    MostrarMensagem("Confira a nova senha e a confirmação. Use pelo menos 8 caracteres.", true);
+                    return;
+                }
+                var hash = PasswordHasher.HashPassword(_perfil, _senhaPerfil);
+                await Usuarios.AlterarSenhaPorIdAsync(_perfil.Id, hash);
+                _senhaPerfil = "";
+                _confirmacaoSenhaPerfil = "";
+            }
+            MostrarMensagem("Perfil atualizado.", false);
+        }
+        catch (Exception)
+        {
+            MostrarMensagem("Não foi possível atualizar o perfil.", true);
+        }
+    }
+
+    private async Task CarregarTermoAsync()
+    {
+        _chaveTermo = (await Chaves.ListarAsync("todas", _codigoTermoChave)).FirstOrDefault();
+        _usuarioTermo = await Usuarios.ObterPorCodigoAsync(_codigoTermoUsuario);
+        if (_chaveTermo is null || _usuarioTermo is null)
+            MostrarMensagem("Confira o código da chave e o código do usuário.", true);
+    }
+
+    private async Task MarcarAlertaLidoAsync(int id)
+    {
+        await Alertas.MarcarComoLidoAsync(id);
+        _alertas = await Alertas.ListarAsync();
+    }
+
+    private void AbrirRetirada(Chave chave)
+    {
+        _uso.CodigoChave = chave.Codigo;
+        Navigation.NavigateTo("/sistema/retirada");
+    }
+
+    private void AbrirDevolucao(Movimentacao movimentacao)
+    {
+        _devolucao.CodigoChave = movimentacao.CodigoChave;
+        _devolucao.CodigoUsuario = movimentacao.CodigoUsuario;
+        Navigation.NavigateTo("/sistema/devolucao");
+    }
+
+    private Task ImprimirAsync() => JS.InvokeVoidAsync("window.print").AsTask();
+
+    private void MostrarMensagem(string texto, bool erro)
+    {
+        _feedback = texto;
+        _feedbackErro = erro;
+    }
+
+    private static string ClasseSituacao(string situacao) => situacao switch
+    {
+        "atrasada" => "status-late",
+        "em_uso" => "status-use",
+        "devolvida" => "status-returned",
+        _ => "status-available"
+    };
+
+    private static string NomeSituacao(string situacao) => situacao switch
+    {
+        "atrasada" => "Em atraso",
+        "em_uso" => "Em uso",
+        "devolvida" => "Devolvida",
+        _ => "Disponível"
+    };
+
+    private static string NomeNivel(string nivel) => nivel switch
+    {
+        "administrador" => "Administrador",
+        "operador" => "Operador",
+        _ => "Consulta"
+    };
+
+    private sealed class UsoForm
+    {
+        [Required(ErrorMessage = "Informe o código da chave.")]
+        public string CodigoChave { get; set; } = "";
+        [Required(ErrorMessage = "Informe o código do usuário.")]
+        public string CodigoUsuario { get; set; } = "";
+        public DateTime RetiradaEm { get; set; } = DateTime.Now;
+        public DateTime PrevistaDevolucao { get; set; } = DateTime.Now.AddHours(2);
+        public string Observacoes { get; set; } = "";
+    }
+
+    private sealed class DevolucaoForm
+    {
+        [Required(ErrorMessage = "Informe o código da chave.")]
+        public string CodigoChave { get; set; } = "";
+        [Required(ErrorMessage = "Informe o código do usuário.")]
+        public string CodigoUsuario { get; set; } = "";
+        public DateTime DevolvidaEm { get; set; } = DateTime.Now;
+        public string Observacoes { get; set; } = "";
+    }
+
+    private sealed class UsuarioNovoForm
+    {
+        [Required, MinLength(2)]
+        public string Nome { get; set; } = "";
+        [Required]
+        public string Codigo { get; set; } = "";
+        [Required, EmailAddress]
+        public string Email { get; set; } = "";
+        [Required, MinLength(8)]
+        public string Senha { get; set; } = "";
+        public int CategoriaId { get; set; }
+        public string NivelAcesso { get; set; } = "consulta";
+    }
+}

@@ -1,0 +1,58 @@
+@page "/login"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+
+<PageTitle>Entrar | Sistema de Chaves</PageTitle>
+
+<div class="login-screen">
+    <section class="login-brand">
+        <IfroBrand />
+        <div class="hero-brand">
+            <svg class="hero-shield" viewBox="0 0 80 80" aria-hidden="true">
+                <path d="M40 5 68 15v22c0 18-11 30-28 39C23 67 12 55 12 37V15L40 5Z" fill="none" stroke="#8fe57c" stroke-width="3" />
+                <circle cx="43" cy="34" r="11" fill="none" stroke="#a8ef8b" stroke-width="5" />
+                <path d="m35 42-19 20v8h10v-8h9v-8h8l7-8" fill="none" stroke="#a8ef8b" stroke-linecap="round" stroke-linejoin="round" stroke-width="5" />
+            </svg>
+            <div><h2>Projeto<br /><span>Chaves</span></h2></div>
+        </div>
+        <p class="hero-caption">Organização e controle de chaves</p>
+    </section>
+
+    <section class="login-panel">
+        <div class="login-card">
+            <h1 class="login-title">Projeto Chaves</h1>
+            <p class="login-subtitle">Acesso seguro ao sistema</p>
+
+            @if (Navigation.Uri.Contains("erro=1", StringComparison.OrdinalIgnoreCase))
+            {
+                <p class="login-error" role="alert">Código ou senha inválidos. Confira os dados e tente novamente.</p>
+            }
+            @if (Navigation.Uri.Contains("senha=ok", StringComparison.OrdinalIgnoreCase))
+            {
+                <p class="login-success">Senha alterada. Entre com sua nova senha.</p>
+            }
+            @if (Navigation.Uri.Contains("cadastro=ok", StringComparison.OrdinalIgnoreCase))
+            {
+                <p class="login-success">Cadastro concluído. Você já pode entrar.</p>
+            }
+
+            <form class="login-form" method="post" action="/auth/entrar">
+                <label>
+                    Matrícula
+                    <input name="codigo" autocomplete="username" placeholder="Insira sua matrícula" required />
+                </label>
+                <label>
+                    Senha
+                    <input name="senha" type="password" autocomplete="current-password" placeholder="Insira sua senha" required />
+                </label>
+                <div class="login-links">
+                    <a href="/cadastro-usuario">Cadastrar novo usuário</a>
+                    <a href="/recuperar-senha">Esqueci minha senha</a>
+                </div>
+                <button class="login-submit" type="submit">Entrar</button>
+            </form>
+            <p class="login-foot">Acesso restrito a usuários cadastrados.<span>IFRO · Sistema de Chaves</span></p>
+        </div>
+    </section>
+</div>

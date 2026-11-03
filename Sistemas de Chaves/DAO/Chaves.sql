@@ -1,0 +1,61 @@
+CREATE DATABASE IF NOT EXISTS sistema_chaves;
+USE sistema_chaves;
+
+CREATE TABLE IF NOT EXISTS categorias_usuario (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(80) NOT NULL UNIQUE,
+  ativa INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS categorias_chave (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(80) NOT NULL UNIQUE,
+  ativa INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  codigo VARCHAR(40) NOT NULL UNIQUE,
+  nome VARCHAR(140) NOT NULL,
+  email VARCHAR(180) NOT NULL UNIQUE,
+  senha_hash VARCHAR(255) NOT NULL,
+  categoria_id INT NOT NULL,
+  nivel_acesso VARCHAR(20) NOT NULL,
+  ativo INT NOT NULL,
+  criado_em DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chaves (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  codigo VARCHAR(60) NOT NULL UNIQUE,
+  descricao VARCHAR(180) NOT NULL,
+  local VARCHAR(180) NOT NULL,
+  categoria_id INT NOT NULL,
+  data_cadastro DATETIME NOT NULL,
+  observacoes VARCHAR(1000),
+  situacao VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS movimentacoes (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  chave_id INT NOT NULL,
+  usuario_id INT NOT NULL,
+  registrada_por_id INT NOT NULL,
+  retirada_em DATETIME NOT NULL,
+  prevista_devolucao DATETIME NOT NULL,
+  devolvida_em DATETIME,
+  observacoes VARCHAR(1000),
+  observacoes_devolucao VARCHAR(1000)
+);
+
+CREATE TABLE IF NOT EXISTS alertas_atraso (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  movimentacao_id INT NOT NULL UNIQUE,
+  criado_em DATETIME NOT NULL,
+  lido_em DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS configuracoes (
+  chave VARCHAR(80) NOT NULL PRIMARY KEY,
+  valor VARCHAR(300) NOT NULL
+);
