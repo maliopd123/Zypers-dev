@@ -2,6 +2,7 @@
 
 Aplicação web para controlar o cadastro, a retirada, a devolução e o histórico de chaves.
 
+de como executar seu projeto caso nao funcione, precisa dessas coisas ai - Abraão
 ## Requisitos
 
 - .NET 8 SDK
